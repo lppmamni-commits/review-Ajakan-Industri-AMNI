@@ -25,7 +25,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <style>
-        body { font-family: 'Times New Roman', serif; background-color: #f3f4f6; } /* Mengubah font agar lebih mirip dokumen resmi */
+        body { font-family: 'Times New Roman', serif; background-color: #f3f4f6; }
         .loading-spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #3b82f6;
@@ -289,49 +289,9 @@ service cloud.firestore {
 
             const inputClass = `w-full border border-gray-300 p-2 rounded text-sm ${isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`;
 
-            // Helper Component untuk Baris Penilaian
-            const ScoreRow = ({ label, items, name, value, rowspan }) => {
-                return (
-                    <>
-                        {items.map((item, idx) => (
-                            <tr key={idx}>
-                                {idx === 0 && rowspan && <td rowSpan={items.length} className="text-center bg-white">{label}</td>} {/* Render Label only on first item */}
-                                {idx === 0 && rowspan && <td rowSpan={items.length} className="text-center font-bold">{item.bobot}</td>}
-                                {/* JENIS LUARAN CELL: Only for specific row */}
-                                {item.jenisLuaranContent ? item.jenisLuaranContent : (idx === 0 && rowspan && <td rowSpan={items.length} className="bg-gray-50"></td>)}
-                                
-                                <td className="text-sm">{item.text}</td>
-                                <td className="text-center font-bold">{item.score}</td>
-                                {idx === 0 && rowspan && (
-                                    <td rowSpan={items.length} className="text-center">
-                                        <div className="flex flex-col items-center justify-center space-y-2">
-                                            {items.map((opt) => (
-                                                <label key={opt.score} className="inline-flex items-center cursor-pointer" title={`Pilih Skor ${opt.score}`}>
-                                                    <input 
-                                                        type="radio" 
-                                                        name={name} 
-                                                        value={opt.score} 
-                                                        checked={value === opt.score} 
-                                                        onChange={(e) => handleScoreChange(name, e.target.value)}
-                                                        className="form-radio h-4 w-4 text-blue-600"
-                                                    />
-                                                    <span className="ml-1 text-xs text-gray-500">({opt.score})</span>
-                                                </label>
-                                            ))}
-                                            <div className="mt-1 font-bold text-lg text-blue-800 border-t w-full">{value}</div>
-                                        </div>
-                                    </td>
-                                )}
-                                {idx === 0 && rowspan && (
-                                    <td rowSpan={items.length} className="text-center font-bold text-lg">
-                                        {value * item.bobot}
-                                    </td>
-                                )}
-                            </tr>
-                        ))}
-                    </>
-                );
-            };
+            const RadioGroup = ({ name, value, onChange, options }) => (
+                <div className="space-y-2 mt-2">{options.map((opt) => (<label key={opt.val} className={`flex items-start p-2 rounded border cursor-pointer hover:bg-gray-50 ${value === opt.val ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'}`}><input type="radio" name={name} value={opt.val} checked={value === opt.val} onChange={(e) => onChange(name, e.target.value)} className="mt-1 h-4 w-4 text-blue-600" /><span className="ml-3 text-sm text-gray-700">{opt.label} <span className="font-bold text-blue-800 ml-1">({opt.val})</span></span></label>))}</div>
+            );
 
             return (
                 <div className="max-w-6xl mx-auto bg-white shadow-xl min-h-screen">
@@ -777,6 +737,292 @@ service cloud.firestore {
                 XLSX.writeFile(wb, "Rekap_Review.xlsx");
             };
 
+            // --- FUNGSI EXPORT BORANG INDIVIDUAL ---
+            const exportIndividualBorang = (data) => {
+                // HAPUS DEKLARASI wb DI SINI UNTUK MENGHINDARI REDEKLARASI
+                
+                // Helper untuk membuat baris kosong
+                const emptyRow = []; 
+
+                // --- 1. HEADER & IDENTITAS ---
+                const ws_data = [
+                    ["LEMBAGA PENELITIAN DAN PENGABDIAN KEPADA MASYARAKAT"],
+                    ["UNIVERSITAS MARITIM AMNI SEMARANG"],
+                    ["FORMULIR PENILAIAN MONITORING DAN EVALUASI INTERNAL DAN EKSTERNAL"],
+                    ["AJAKAN INDUSTRI TAHUN 2025"],
+                    [],
+                    ["Identitas Reviewer"],
+                    ["Nama Reviewer", ": " + data.namaReviewer],
+                    ["NIDN Reviewer", ": " + data.nidnReviewer],
+                    [],
+                    ["Identitas Peneliti"],
+                    ["Judul Penelitian", ": " + data.judulPenelitian],
+                    ["Bidang Penelitian", ": " + data.bidangPenelitian],
+                    ["Perguruan Tinggi", ": " + data.perguruanTinggi],
+                    ["Program Studi", ": " + data.programStudi],
+                    ["Ketua Peneliti"],
+                    ["   Nama Lengkap", ": " + data.ketuaNama],
+                    ["   NIDN/NIDK", ": " + data.ketuaNidn],
+                    ["   Jabatan Fungsional", ": " + (data.ketuaJabatan || '-')],
+                    ["Lama Penelitian", ": " + data.lamaPenelitian],
+                    ["Jumlah Anggota", ": " + data.jumlahAnggota],
+                    ["Luaran", ": " + data.luaran],
+                    ["Tahun", ": " + data.tahun],
+                    [],
+                    // --- 2. TABLE HEADER ---
+                    ["NO", "KOMPONEN PENILAIAN", "PENILAIAN", "", "", "", "", "", ""],
+                    ["", "", "INDIKATOR PENILAIAN", "Bobot (%)", "JENIS LUARAN", "ITEM", "SKOR", "SKOR PENILAIAN", "NILAI (SKOR X BOBOT)"]
+                ];
+
+                // --- 3. TABLE BODY (Manual Row Construction) ---
+                
+                // Helper untuk menghitung nilai
+                const s1_a = data.s1_aktivitas; const v1_a = s1_a * 20;
+                const s1_j = data.s1_jadwal;    const v1_j = s1_j * 10;
+                const s1_t = data.s1_tim;       const v1_t = s1_t * 10;
+                
+                const s2_k = data.s2_ketercapaian; const v2_k = s2_k * 10;
+                const s2_r = data.s2_relevansi;    const v2_r = s2_r * 10;
+                const s2_p = data.s2_periode;      const v2_p = s2_p * 10;
+                
+                const s3_m = data.s3_mitra;      const v3_m = s3_m * 8;
+                const s3_k = data.s3_koordinasi; const v3_k = s3_k * 5;
+                const s3_d = data.s3_pendanaan;  const v3_d = s3_d * 5;
+                const s3_l = data.s3_pimpinan;   const v3_l = s3_l * 7;
+                
+                const s4_p = data.s4_potensi;    const v4_p = s4_p * 5;
+
+                // Rows construction
+                ws_data.push(
+                    // 1. Pelaksanaan - Aktivitas
+                    [1, "Pelaksanaan Penelitian (40%)", "Kesesuaian Aktivitas", 20, "", "Pelaksanaan Penelitian Tidak Sesuai Dengan Aktivitas yang Sudah Direncanakan", 1, s1_a, v1_a],
+                    ["", "", "", "", "", "Pelaksanaan Penelitian 50% Sesuai Dengan Aktivitas yang Sudah Direncanakan", 3, "", ""],
+                    ["", "", "", "", "", "Pelaksanaan Penelitian >= 80% Sesuai Dengan Aktivitas yang Sudah Direncanakan", 4, "", ""],
+                    // 1. Pelaksanaan - Jadwal
+                    ["", "", "Kesesuaian Jadwal", 10, "", "Pelaksanaan Penelitian Tidak Sesuai Dengan Jadwal yang Sudah Direncanakan", 1, s1_j, v1_j],
+                    ["", "", "", "", "", "Pelaksanaan Penelitian 50% Sesuai Dengan Jadwal yang Sudah Direncanakan", 3, "", ""],
+                    ["", "", "", "", "", "Pelaksanaan Penelitian >= 80% Sesuai Dengan Jadwal yang Sudah Direncanakan", 4, "", ""],
+                    // 1. Pelaksanaan - Tim
+                    ["", "", "Keterlibatan Anggota Tim dalam Pelaksanaan Kegiatan (10%)", 10, "", "Ketua atau Sebagian Anggota Tim Tidak Terlibat Aktif dalam Pelaksanaan Penelitian", 1, s1_t, v1_t],
+                    ["", "", "", "", "", "Ketua dan Sebagian Anggota Tim Terlibat Aktif dalam Pelaksanaan Penelitian", 3, "", ""],
+                    ["", "", "", "", "", "Ketua dan Semua Anggota Tim Terlibat Aktif dalam Pelaksanaan Penelitian", 4, "", ""]
+                );
+
+                // 2. Luaran
+                // Logic dynamic rows for KI/Purwarupa
+                const isKI = data.jenisLuaran === 'ki';
+                if (isKI) {
+                    ws_data.push(
+                        [2, "Luaran dan Dampak (30%)", "Ketercapaian Luaran", 10, "Kekayaan Intelektual", "Belum Ada Draft", 1, s2_k, v2_k],
+                        ["", "", "", "", "", "Masih Berupa Draft", 2, "", ""],
+                        ["", "", "", "", "", "Draft dan Dokumen Pendaftaran Sudah Lengkap", 3, "", ""],
+                        ["", "", "", "", "", "Telah Mendapatkan Nomor Pendaftaran", 4, "", ""]
+                    );
+                } else {
+                    ws_data.push(
+                        [2, "Luaran dan Dampak (30%)", "Ketercapaian Luaran", 10, "Purwarupa", "Purwarupa Sudah Diuji di Laboratorium", 1, s2_k, v2_k],
+                        ["", "", "", "", "", "Purwarupa Telah Disempurnakan Namun Belum Diuji di Lingkungan Mitra Industri", 3, "", ""],
+                        ["", "", "", "", "", "Purwarupa Telah diuji di lingkungan Mitra Industri", 4, "", ""]
+                    );
+                }
+
+                ws_data.push(
+                    // 2. Luaran - Relevansi
+                    ["", "", "Relevansi luaran dalam menjawab kebutuhan industri", 10, "", "Tidak Sesuai", 1, s2_r, v2_r],
+                    ["", "", "", "", "", "Kurang Sesuai", 2, "", ""],
+                    ["", "", "", "", "", "Sesuai", 3, "", ""],
+                    ["", "", "", "", "", "Sangat Sesuai", 4, "", ""],
+                    // 2. Luaran - Periode
+                    ["", "", "Kesesuaian Periode Pencapaian Luaran", 10, "", "Tidak Sesuai", 1, s2_p, v2_p],
+                    ["", "", "", "", "", "Sesuai", 4, "", ""]
+                );
+
+                ws_data.push(
+                    // 3. Kolaborasi - Mitra
+                    [3, "Realisasi Kolaborasi dengan Mitra Industri (25%)", "Keterlibatan Mitra Industri dalam Aktivitas Penelitian", 8, "", "Tidak Ada Keterlibatan Mitra", 1, s3_m, v3_m],
+                    ["", "", "", "", "", "Keterlibatan Mitra > 10% namun < 60%", 2, "", ""],
+                    ["", "", "", "", "", "Mitra Terlibat > 60% namun < 90%", 3, "", ""],
+                    ["", "", "", "", "", "Mitra Terlibat dalam Seluruh Kegiatan", 4, "", ""],
+                    // 3. Kolaborasi - Koordinasi
+                    ["", "", "Frekuensi Koordinasi/Kegiatan Bersama Mitra", 5, "", "Tidak Ada Koordinasi Bersama Mitra", 1, s3_k, v3_k],
+                    ["", "", "", "", "", "Koordinasi Hanya Dilakukan di Tahap Awal", 2, "", ""],
+                    ["", "", "", "", "", "Koordinasi Dilakukan Secara Berkala Setiap Tahapan Kegiatan", 4, "", ""],
+                    // 3. Kolaborasi - Pendanaan
+                    ["", "", "Realisasi Kontribusi Pendanaan Mitra Industri", 5, "", "Tidak Ada Realisasi Kontribusi", 1, s3_d, v3_d],
+                    ["", "", "", "", "", "Realisasi Kontribusi <=50% dari Kesepakatan", 3, "", ""],
+                    ["", "", "", "", "", "Realisasi Kontribusi Sesuai dengan Kesepakatan", 4, "", ""],
+                    // 3. Kolaborasi - Level Pimpinan
+                    ["", "", "Level Pimpinan Mitra Industri yang Terlibat dalam Penelitian", 7, "", "Mitra yang Terlibat Merupakan Operator", 2, s3_l, v3_l],
+                    ["", "", "", "", "", "Mitra yang Terlibat Merupakan Staf/ Engineering/Pelaksana", 3, "", ""],
+                    ["", "", "", "", "", "Mitra yang Terlibat Merupakan Direktur Manager/Pengambil Keputusan", 4, "", ""]
+                );
+
+                ws_data.push(
+                    // 4. Keberlanjutan
+                    [4, "Rencana Keberlanjutan Kolaborasi (5%)", "Potensi Kerjasama Jangka Panjang", 5, "", "Tidak Ada Potensi Keberlanjutan", 1, s4_p, v4_p],
+                    ["", "", "", "", "", "Berpotensi untuk Dilanjutkan", 3, "", ""],
+                    ["", "", "", "", "", "Sudah Dirumuskan Keberlanjutannya", 4, "", ""]
+                );
+
+                // Footer Totals
+                ws_data.push(
+                    ["TOTAL SKOR (Max 400)", "", "", "", "", "", "", "", data.totalScoreRaw],
+                    ["NILAI AKHIR (Skala 100)", "", "", "", "", "", "", "", data.finalScore100]
+                );
+
+                // Footer Signature
+                ws_data.push(
+                    [], 
+                    ["Komentar Umum", "", data.komentar],
+                    [], [],
+                    ["", "", "", "", "", "", "Semarang, " + new Date().toLocaleDateString('id-ID')],
+                    ["", "", "", "", "", "", "Reviewer,"],
+                    [], [], [],
+                    ["", "", "", "", "", "", data.namaReviewer]
+                );
+
+                // --- 4. MERGES DEFINITION (MANDATORY FOR LAYOUT) ---
+                // Note: Index starts at 0. Row 23 is the first data row (index 23 in Array, row 24 in Excel)
+                // Header Merges
+                const merges = [
+                    {s:{r:0,c:0}, e:{r:0,c:8}}, // Header 1
+                    {s:{r:1,c:0}, e:{r:1,c:8}}, // Header 2
+                    {s:{r:2,c:0}, e:{r:2,c:8}}, // Header 3
+                    {s:{r:3,c:0}, e:{r:3,c:8}}, // Header 4
+                    // Table Header
+                    {s:{r:23,c:0}, e:{r:24,c:0}}, // NO
+                    {s:{r:23,c:1}, e:{r:24,c:1}}, // KOMPONEN
+                    {s:{r:23,c:2}, e:{r:23,c:8}}, // PENILAIAN (Horizontal)
+                ];
+
+                // Helper to add data row merges
+                let currentRow = 25; // Starting data row index
+                
+                // 1. Pelaksanaan (9 rows total)
+                merges.push({s:{r:currentRow,c:0}, e:{r:currentRow+8,c:0}}); // "1"
+                merges.push({s:{r:currentRow,c:1}, e:{r:currentRow+8,c:1}}); // "Pelaksanaan..."
+                // Sub 1 (3 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+2,c:2}}); // Indikator
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+2,c:3}}); // Bobot
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+2,c:4}}); // Jenis (Empty)
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+2,c:7}}); // Skor Penilaian
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+2,c:8}}); // Nilai
+                currentRow += 3;
+                // Sub 2 (3 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+2,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+2,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+2,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+2,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+2,c:8}});
+                currentRow += 3;
+                // Sub 3 (3 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+2,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+2,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+2,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+2,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+2,c:8}});
+                currentRow += 3;
+
+                // 2. Luaran (Dynamic rows)
+                const rowsLuaran = isKI ? 10 : 9;
+                const rowsSub1 = isKI ? 4 : 3;
+                
+                merges.push({s:{r:currentRow,c:0}, e:{r:currentRow+rowsLuaran-1,c:0}}); // "2"
+                merges.push({s:{r:currentRow,c:1}, e:{r:currentRow+rowsLuaran-1,c:1}}); // "Luaran..."
+                // Sub 1 (Dynamic)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+rowsSub1-1,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+rowsSub1-1,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+rowsSub1-1,c:4}}); // Jenis Luaran Text
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+rowsSub1-1,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+rowsSub1-1,c:8}});
+                currentRow += rowsSub1;
+                // Sub 2 (4 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+3,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+3,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+3,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+3,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+3,c:8}});
+                currentRow += 4;
+                // Sub 3 (2 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+1,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+1,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+1,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+1,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+1,c:8}});
+                currentRow += 2;
+
+                // 3. Kolaborasi (13 rows)
+                merges.push({s:{r:currentRow,c:0}, e:{r:currentRow+12,c:0}}); // "3"
+                merges.push({s:{r:currentRow,c:1}, e:{r:currentRow+12,c:1}}); 
+                // Sub 1 (4 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+3,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+3,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+3,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+3,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+3,c:8}});
+                currentRow += 4;
+                // Sub 2 (3 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+2,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+2,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+2,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+2,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+2,c:8}});
+                currentRow += 3;
+                // Sub 3 (3 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+2,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+2,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+2,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+2,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+2,c:8}});
+                currentRow += 3;
+                // Sub 4 (3 rows)
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+2,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+2,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+2,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+2,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+2,c:8}});
+                currentRow += 3;
+
+                // 4. Keberlanjutan (3 rows)
+                merges.push({s:{r:currentRow,c:0}, e:{r:currentRow+2,c:0}}); // "4"
+                merges.push({s:{r:currentRow,c:1}, e:{r:currentRow+2,c:1}}); 
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+2,c:2}}); 
+                merges.push({s:{r:currentRow,c:3}, e:{r:currentRow+2,c:3}}); 
+                merges.push({s:{r:currentRow,c:4}, e:{r:currentRow+2,c:4}}); 
+                merges.push({s:{r:currentRow,c:7}, e:{r:currentRow+2,c:7}}); 
+                merges.push({s:{r:currentRow,c:8}, e:{r:currentRow+2,c:8}});
+                currentRow += 3;
+
+                // Footer Totals
+                merges.push({s:{r:currentRow,c:0}, e:{r:currentRow,c:7}}); // "TOTAL..."
+                merges.push({s:{r:currentRow+1,c:0}, e:{r:currentRow+1,c:7}}); // "NILAI..."
+                currentRow += 2;
+
+                // Komentar
+                currentRow += 1; // Spacer
+                merges.push({s:{r:currentRow,c:2}, e:{r:currentRow+1,c:8}}); // Komentar Box text
+
+                const ws = XLSX.utils.aoa_to_sheet(ws_data);
+                ws['!merges'] = merges;
+                
+                // Adjust column widths
+                ws['!cols'] = [
+                    {wch: 5},  // No
+                    {wch: 25}, // Komponen
+                    {wch: 25}, // Indikator
+                    {wch: 8},  // Bobot
+                    {wch: 15}, // Jenis
+                    {wch: 40}, // Item
+                    {wch: 5},  // Skor
+                    {wch: 15}, // Skor Penilaian
+                    {wch: 10}  // Nilai
+                ];
+
+                const wb = XLSX.utils.book_new(); // INI OK KARENA YANG DI ATAS SUDAH DIHAPUS
+                XLSX.utils.book_append_sheet(wb, ws, "Borang " + data.namaReviewer.substring(0, 10));
+                XLSX.writeFile(wb, "Borang_Penilaian_" + data.ketuaNama + ".xlsx");
+            };
+
             return (
                 <div className="space-y-6 font-sans">
                     {/* Panel Pengumuman */}
@@ -794,8 +1040,8 @@ service cloud.firestore {
                     {/* TAB 1: HASIL REVIEW */}
                     {tab === 'reviews' && (
                         <div className="bg-white p-6 rounded shadow">
-                            <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold">Rekapitulasi Nilai</h2><div className="flex gap-2"><button onClick={exportToExcel} className="bg-green-600 text-white px-3 py-1 rounded">Excel</button><button onClick={() => setView('form')} className="bg-red-500 text-white px-3 py-1 rounded">Keluar</button></div></div>
-                            <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200 border text-sm"><thead className="bg-gray-50"><tr><th className="p-2 text-left">Judul</th><th className="p-2 text-left">Ketua</th><th className="p-2 text-left">Reviewer</th><th className="p-2 text-center">Nilai</th><th className="p-2">Komentar</th></tr></thead><tbody>{reviews.map(r => (<tr key={r.id} className="border-b"><td className="p-2 font-medium">{r.judulPenelitian}</td><td className="p-2">{r.ketuaNama}</td><td className="p-2">{r.namaReviewer}</td><td className="p-2 text-center font-bold text-blue-600">{r.finalScore100}</td><td className="p-2 italic text-gray-500 truncate max-w-xs">{r.komentar}</td></tr>))}</tbody></table></div>
+                            <div className="flex justify-between items-center mb-4"><h2 className="text-xl font-bold">Rekapitulasi Nilai</h2><div className="flex gap-2"><button onClick={exportToExcel} className="bg-green-600 text-white px-3 py-1 rounded">Rekap Excel</button><button onClick={() => setView('form')} className="bg-red-500 text-white px-3 py-1 rounded">Keluar</button></div></div>
+                            <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200 border text-sm"><thead className="bg-gray-50"><tr><th className="p-2 text-left">Judul</th><th className="p-2 text-left">Ketua</th><th className="p-2 text-left">Reviewer</th><th className="p-2 text-center">Nilai</th><th className="p-2 text-center">Aksi</th></tr></thead><tbody>{reviews.map(r => (<tr key={r.id} className="border-b"><td className="p-2 font-medium">{r.judulPenelitian}</td><td className="p-2">{r.ketuaNama}</td><td className="p-2">{r.namaReviewer}</td><td className="p-2 text-center font-bold text-blue-600">{r.finalScore100}</td><td className="p-2 text-center"><button onClick={() => exportIndividualBorang(r)} className="text-green-600 hover:text-green-800" title="Download Borang"><i data-lucide="file-down" className="w-5 h-5 mx-auto"></i></button></td></tr>))}</tbody></table></div>
                         </div>
                     )}
 
