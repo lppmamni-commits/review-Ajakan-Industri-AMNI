@@ -25,7 +25,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        body { font-family: 'Times New Roman', serif; background-color: #f3f4f6; } /* Mengubah font agar lebih mirip dokumen resmi */
         .loading-spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #3b82f6;
@@ -41,6 +41,19 @@
             body { background-color: white; }
             .shadow-md, .shadow-xl { box-shadow: none; }
             .border { border: 1px solid #000; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+        }
+        /* Table Styles to match Borang */
+        .borang-table th, .borang-table td {
+            border: 1px solid #000;
+            padding: 4px 8px;
+            vertical-align: middle;
+        }
+        .borang-table th {
+            background-color: #e5e7eb;
+            text-align: center;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -68,7 +81,7 @@
         // --- DATA KONSTAN ---
         const APP_ID = "hilirisasi-v1"; 
         const COLLECTION_NAME = "reviews";
-        const PROPOSALS_COLLECTION = "proposals"; // Koleksi baru untuk Master Data
+        const PROPOSALS_COLLECTION = "proposals"; 
         const SETTINGS_COLLECTION = "settings";
 
         const { useState, useEffect } = React;
@@ -122,7 +135,7 @@
 
             if (dbError && dbError.type === 'rules') return (
                 <div className="min-h-screen flex items-center justify-center bg-orange-50 p-4">
-                    <div className="bg-white p-8 rounded border-2 border-orange-500 max-w-2xl text-center">
+                    <div className="bg-white p-8 rounded border-2 border-orange-500 max-w-2xl text-center font-sans">
                         <h2 className="text-2xl font-bold text-orange-700 mb-2">Akses Database Ditolak</h2>
                         <p className="mb-4">Pastikan Rules Firestore Anda benar:</p>
                         <pre className="text-xs bg-gray-800 text-green-400 p-3 rounded text-left overflow-auto">
@@ -142,12 +155,12 @@ service cloud.firestore {
                 </div>
             );
 
-            if (dbError && dbError.type === 'missing') return <div className="p-10 text-center text-red-600 font-bold">Database Belum Dibuat di Firebase Console.</div>;
-            if (authError) return <div className="p-10 text-center text-red-600 font-bold">{authError}</div>;
+            if (dbError && dbError.type === 'missing') return <div className="p-10 text-center text-red-600 font-bold font-sans">Database Belum Dibuat di Firebase Console.</div>;
+            if (authError) return <div className="p-10 text-center text-red-600 font-bold font-sans">{authError}</div>;
             if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="loading-spinner"></div></div>;
 
             return (
-                <div className="min-h-screen flex flex-col">
+                <div className="min-h-screen flex flex-col font-sans">
                     <nav className="bg-blue-900 text-white shadow-lg no-print">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex justify-between h-16 items-center">
@@ -186,6 +199,7 @@ service cloud.firestore {
                 judulPenelitian: '', bidangPenelitian: '', perguruanTinggi: '', programStudi: '',
                 ketuaNama: '', ketuaNidn: '', ketuaJabatan: '',
                 lamaPenelitian: '', jumlahAnggota: '', luaran: '', tahun: '2025',
+                // Scores
                 s1_aktivitas: 0, s1_jadwal: 0, s1_tim: 0,
                 jenisLuaran: 'ki', s2_ketercapaian: 0, s2_relevansi: 0, s2_periode: 0,
                 s3_mitra: 0, s3_koordinasi: 0, s3_pendanaan: 0, s3_pimpinan: 0,
@@ -195,8 +209,15 @@ service cloud.firestore {
 
             const [proposals, setProposals] = useState([]);
             const [submitting, setSubmitting] = useState(false);
+            const [isLocked, setIsLocked] = useState(false);
 
-            // Fetch Proposals untuk Dropdown
+            // Format tanggal hari ini dalam bahasa Indonesia
+            const currentDate = new Date().toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+
             useEffect(() => {
                 if(!user) return;
                 const unsub = db.collection('artifacts').doc(APP_ID).collection('public').doc('data').collection(PROPOSALS_COLLECTION)
@@ -217,10 +238,12 @@ service cloud.firestore {
                 setFormData(prev => ({ ...prev, [name]: parseInt(val) }));
             };
 
-            // Autofill saat memilih usulan
             const handleProposalSelect = (e) => {
                 const selectedId = e.target.value;
-                if (!selectedId) return;
+                if (!selectedId) {
+                    setIsLocked(false);
+                    return;
+                }
                 const selected = proposals.find(p => p.id === selectedId);
                 if (selected) {
                     setFormData(prev => ({
@@ -237,6 +260,7 @@ service cloud.firestore {
                         luaran: selected.luaran,
                         tahun: selected.tahun
                     }));
+                    setIsLocked(true);
                 }
             };
 
@@ -263,96 +287,415 @@ service cloud.firestore {
                 } catch (error) { alert("Gagal: " + error.message); } finally { setSubmitting(false); }
             };
 
-            const RadioGroup = ({ name, value, onChange, options }) => (
-                <div className="space-y-2 mt-2">{options.map((opt) => (<label key={opt.val} className={`flex items-start p-2 rounded border cursor-pointer hover:bg-gray-50 ${value === opt.val ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'}`}><input type="radio" name={name} value={opt.val} checked={value === opt.val} onChange={(e) => onChange(name, e.target.value)} className="mt-1 h-4 w-4 text-blue-600" /><span className="ml-3 text-sm text-gray-700">{opt.label} <span className="font-bold text-blue-800 ml-1">({opt.val})</span></span></label>))}</div>
-            );
+            const inputClass = `w-full border border-gray-300 p-2 rounded text-sm ${isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`;
+
+            // Helper Component untuk Baris Penilaian
+            const ScoreRow = ({ label, items, name, value, rowspan }) => {
+                return (
+                    <>
+                        {items.map((item, idx) => (
+                            <tr key={idx}>
+                                {idx === 0 && rowspan && <td rowSpan={items.length} className="text-center bg-white">{label}</td>} {/* Render Label only on first item */}
+                                {idx === 0 && rowspan && <td rowSpan={items.length} className="text-center font-bold">{item.bobot}</td>}
+                                {/* JENIS LUARAN CELL: Only for specific row */}
+                                {item.jenisLuaranContent ? item.jenisLuaranContent : (idx === 0 && rowspan && <td rowSpan={items.length} className="bg-gray-50"></td>)}
+                                
+                                <td className="text-sm">{item.text}</td>
+                                <td className="text-center font-bold">{item.score}</td>
+                                {idx === 0 && rowspan && (
+                                    <td rowSpan={items.length} className="text-center">
+                                        <div className="flex flex-col items-center justify-center space-y-2">
+                                            {items.map((opt) => (
+                                                <label key={opt.score} className="inline-flex items-center cursor-pointer" title={`Pilih Skor ${opt.score}`}>
+                                                    <input 
+                                                        type="radio" 
+                                                        name={name} 
+                                                        value={opt.score} 
+                                                        checked={value === opt.score} 
+                                                        onChange={(e) => handleScoreChange(name, e.target.value)}
+                                                        className="form-radio h-4 w-4 text-blue-600"
+                                                    />
+                                                    <span className="ml-1 text-xs text-gray-500">({opt.score})</span>
+                                                </label>
+                                            ))}
+                                            <div className="mt-1 font-bold text-lg text-blue-800 border-t w-full">{value}</div>
+                                        </div>
+                                    </td>
+                                )}
+                                {idx === 0 && rowspan && (
+                                    <td rowSpan={items.length} className="text-center font-bold text-lg">
+                                        {value * item.bobot}
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                    </>
+                );
+            };
 
             return (
-                <div className="max-w-5xl mx-auto">
-                    {announcement && <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 shadow-sm rounded-r-md"><div className="flex"><i data-lucide="info" className="h-5 w-5 text-yellow-400 flex-shrink-0"></i><p className="ml-3 text-sm text-yellow-700 whitespace-pre-wrap">{announcement}</p></div></div>}
-                    <div className="bg-white rounded-lg shadow-md p-8 border border-gray-300">
-                        
+                <div className="max-w-6xl mx-auto bg-white shadow-xl min-h-screen">
+                    {announcement && <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 shadow-sm"><div className="flex"><i data-lucide="info" className="h-5 w-5 text-yellow-400 flex-shrink-0"></i><p className="ml-3 text-sm text-yellow-700 whitespace-pre-wrap">{announcement}</p></div></div>}
+                    
+                    <div className="p-8 md:p-12">
                         {/* HEADER IDENTITAS AMNI */}
                         <div className="text-center mb-8 border-b-2 border-black pb-4">
                             <div className="flex flex-col items-center justify-center mb-4">
                                 <img src="https://pmb.unimar-amni.ac.id/assets/front1/img/amni-png.png" alt="Logo UNIMAR AMNI" className="h-24 mb-2 object-contain"/>
-                                <h2 className="text-xl font-bold text-blue-900 uppercase tracking-wide">Lembaga Penelitian dan Pengabdian Kepada Masyarakat</h2>
-                                <h1 className="text-2xl font-extrabold text-blue-900 uppercase tracking-wide">Universitas Maritim AMNI Semarang</h1>
+                                <h2 className="text-xl font-bold text-blue-900 uppercase tracking-wide font-sans">Lembaga Penelitian dan Pengabdian Kepada Masyarakat</h2>
+                                <h1 className="text-3xl font-extrabold text-blue-900 uppercase tracking-wide font-sans">Universitas Maritim AMNI Semarang</h1>
                             </div>
-                            <h2 className="text-xl font-bold uppercase mt-2">Formulir Penilaian Monitoring dan Evaluasi Internal dan Eksternal</h2>
-                            <h3 className="text-lg font-bold uppercase">Ajakan Industri Tahun 2025</h3>
+                            <h2 className="text-xl font-bold uppercase mt-4 underline decoration-2 underline-offset-4">FORMULIR PENILAIAN MONITORING DAN EVALUASI INTERNAL DAN EKSTERNAL</h2>
+                            <h3 className="text-lg font-bold uppercase mt-1">AJAKAN INDUSTRI TAHUN 2025</h3>
                         </div>
                         
-                        <form onSubmit={handleSubmit} className="space-y-8">
-                            <div className="bg-blue-50 p-4 rounded border border-blue-200 mb-4">
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            {/* PILIH USULAN */}
+                            <div className="bg-blue-50 p-4 rounded border border-blue-200 font-sans">
                                 <label className="block text-sm font-bold text-blue-800 mb-2">Pilih Usulan / Judul Penelitian (Autofill)</label>
-                                <select onChange={handleProposalSelect} className="w-full border p-2 rounded text-gray-700">
+                                <select onChange={handleProposalSelect} className="w-full border border-blue-300 p-2 rounded text-gray-700">
                                     <option value="">-- Pilih Judul dari Database (Opsional) --</option>
                                     {proposals.map(p => (
                                         <option key={p.id} value={p.id}>{p.judulPenelitian} - {p.ketuaNama}</option>
                                     ))}
                                 </select>
-                                <p className="text-xs text-blue-600 mt-1">*Jika judul tidak ada, silakan isi manual di bawah.</p>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded border">
-                                <h4 className="md:col-span-2 font-bold text-gray-800 border-b pb-2">Identitas Reviewer</h4>
-                                <div><label className="block text-sm font-semibold">Nama Reviewer</label><input type="text" name="namaReviewer" value={formData.namaReviewer} onChange={handleChange} className="w-full border p-2 rounded" required /></div>
-                                <div><label className="block text-sm font-semibold">NIDN Reviewer</label><input type="text" name="nidnReviewer" value={formData.nidnReviewer} onChange={handleChange} className="w-full border p-2 rounded" required /></div>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded border">
-                                <h4 className="md:col-span-2 font-bold text-gray-800 border-b pb-2">Identitas Peneliti</h4>
-                                <div className="md:col-span-2"><label className="block text-sm font-semibold">Judul Penelitian</label><textarea name="judulPenelitian" value={formData.judulPenelitian} onChange={handleChange} className="w-full border p-2 rounded" rows="2" required></textarea></div>
-                                <div><label className="block text-sm font-semibold">Bidang Penelitian</label><input type="text" name="bidangPenelitian" value={formData.bidangPenelitian} onChange={handleChange} className="w-full border p-2 rounded" /></div>
-                                <div><label className="block text-sm font-semibold">Perguruan Tinggi</label><input type="text" name="perguruanTinggi" value={formData.perguruanTinggi} onChange={handleChange} className="w-full border p-2 rounded" /></div>
-                                <div><label className="block text-sm font-semibold">Program Studi</label><input type="text" name="programStudi" value={formData.programStudi} onChange={handleChange} className="w-full border p-2 rounded" /></div>
-                                <div><label className="block text-sm font-semibold">Tahun</label><input type="text" name="tahun" value={formData.tahun} onChange={handleChange} className="w-full border p-2 rounded" /></div>
-                                <div className="md:col-span-2 mt-2">
-                                    <h5 className="font-semibold text-gray-700 mb-2">Ketua Peneliti</h5>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-4 border-l-2 border-blue-200">
-                                        <div><label className="text-xs text-gray-500">Nama Lengkap</label><input type="text" name="ketuaNama" value={formData.ketuaNama} onChange={handleChange} className="w-full border p-1 rounded" required /></div>
-                                        <div><label className="text-xs text-gray-500">NIDN/NIDK</label><input type="text" name="ketuaNidn" value={formData.ketuaNidn} onChange={handleChange} className="w-full border p-1 rounded" required /></div>
-                                        <div><label className="text-xs text-gray-500">Jabatan Fungsional</label><input type="text" name="ketuaJabatan" value={formData.ketuaJabatan} onChange={handleChange} className="w-full border p-1 rounded" /></div>
+                            {/* IDENTITAS */}
+                            <div className="grid grid-cols-1 gap-6 font-sans text-sm">
+                                {/* Reviewer */}
+                                <div className="border border-black p-4">
+                                    <h4 className="font-bold text-lg mb-3 border-b border-gray-400 pb-1">Identitas Reviewer</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label className="block font-semibold">Nama Reviewer :</label><input type="text" name="namaReviewer" value={formData.namaReviewer} onChange={handleChange} className="w-full border-b border-gray-400 p-1 focus:outline-none focus:border-blue-500" required /></div>
+                                        <div><label className="block font-semibold">NIDN Reviewer :</label><input type="text" name="nidnReviewer" value={formData.nidnReviewer} onChange={handleChange} className="w-full border-b border-gray-400 p-1 focus:outline-none focus:border-blue-500" required /></div>
                                     </div>
                                 </div>
-                                <div><label className="block text-sm font-semibold">Lama Penelitian</label><input type="text" name="lamaPenelitian" value={formData.lamaPenelitian} onChange={handleChange} className="w-full border p-2 rounded" /></div>
-                                <div><label className="block text-sm font-semibold">Jumlah Anggota</label><input type="number" name="jumlahAnggota" value={formData.jumlahAnggota} onChange={handleChange} className="w-full border p-2 rounded" /></div>
-                                <div className="md:col-span-2"><label className="block text-sm font-semibold">Luaran yang dijanjikan</label><input type="text" name="luaran" value={formData.luaran} onChange={handleChange} className="w-full border p-2 rounded" /></div>
+
+                                {/* Peneliti */}
+                                <div className="border border-black p-4 relative">
+                                    <h4 className="font-bold text-lg mb-3 border-b border-gray-400 pb-1 flex justify-between">
+                                        Identitas Peneliti {isLocked && <span className="text-xs text-red-500 font-normal bg-red-50 px-2 py-0.5 rounded border border-red-200">Locked</span>}
+                                    </h4>
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Judul Penelitian :</label><textarea name="judulPenelitian" value={formData.judulPenelitian} onChange={handleChange} className={`${inputClass} h-16`} required readOnly={isLocked}></textarea></div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Bidang Penelitian :</label><input type="text" name="bidangPenelitian" value={formData.bidangPenelitian} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                            <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Tahun :</label><input type="text" name="tahun" value={formData.tahun} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Perguruan Tinggi :</label><input type="text" name="perguruanTinggi" value={formData.perguruanTinggi} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                            <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Program Studi :</label><input type="text" name="programStudi" value={formData.programStudi} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                        </div>
+                                        
+                                        <div className="mt-2 pl-4 border-l-4 border-gray-200">
+                                            <div className="font-bold mb-1 text-gray-700">Ketua Peneliti</div>
+                                            <div className="grid grid-cols-[130px_1fr] items-center mb-1"><label className="text-gray-600">Nama Lengkap :</label><input type="text" name="ketuaNama" value={formData.ketuaNama} onChange={handleChange} className={inputClass} required readOnly={isLocked} /></div>
+                                            <div className="grid grid-cols-[130px_1fr] items-center mb-1"><label className="text-gray-600">NIDN/NIDK :</label><input type="text" name="ketuaNidn" value={formData.ketuaNidn} onChange={handleChange} className={inputClass} required readOnly={isLocked} /></div>
+                                            <div className="grid grid-cols-[130px_1fr] items-center"><label className="text-gray-600">Jabatan Fungsional :</label><input type="text" name="ketuaJabatan" value={formData.ketuaJabatan} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                            <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Lama Penelitian :</label><input type="text" name="lamaPenelitian" value={formData.lamaPenelitian} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                            <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Jumlah Anggota :</label><input type="number" name="jumlahAnggota" value={formData.jumlahAnggota} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                        </div>
+                                        <div className="grid grid-cols-[150px_1fr] items-center"><label className="font-semibold">Luaran :</label><input type="text" name="luaran" value={formData.luaran} onChange={handleChange} className={inputClass} readOnly={isLocked} /></div>
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* MATRIKS */}
-                            <div className="border rounded-lg overflow-hidden">
-                                <table className="w-full text-sm border-collapse">
-                                    <thead className="bg-gray-100 border-b-2 border-gray-300"><tr><th className="p-2 border w-10">No</th><th className="p-2 border">Komponen</th><th className="p-2 border">Indikator</th><th className="p-2 border w-24">Skor</th><th className="p-2 border w-24">Nilai</th></tr></thead>
+                            {/* MATRIKS PENILAIAN */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full borang-table border-collapse text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th rowSpan="2" className="w-8 bg-gray-200">NO</th>
+                                            <th rowSpan="2" className="bg-gray-200 w-1/6">KOMPONEN PENILAIAN</th>
+                                            <th colSpan="7" className="bg-gray-200">PENILAIAN</th>
+                                        </tr>
+                                        <tr>
+                                            <th className="bg-gray-100">INDIKATOR PENILAIAN</th>
+                                            <th className="bg-gray-100 w-12">Bobot (%)</th>
+                                            <th className="bg-gray-100 w-24">JENIS LUARAN</th>
+                                            <th className="bg-gray-100">ITEM</th>
+                                            <th className="bg-gray-100 w-10">SKOR</th>
+                                            <th className="bg-gray-100 w-24">SKOR PENILAIAN (Pilih Salah Satu)</th>
+                                            <th className="bg-gray-100 w-24">NILAI (SKOR X BOBOT)</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
-                                        <tr className="bg-gray-50"><td colSpan="5" className="p-2 font-bold border">1. Pelaksanaan (40%)</td></tr>
-                                        <tr><td className="p-2 border text-center">1</td><td className="p-2 border font-semibold">Kesesuaian Aktivitas (20%)</td><td className="p-2 border"><RadioGroup name="s1_aktivitas" value={formData.s1_aktivitas} onChange={handleScoreChange} options={[{val: 1, label: "Tidak Sesuai"}, {val: 3, label: "50% Sesuai"}, {val: 4, label: ">= 80% Sesuai"}]} /></td><td className="p-2 border text-center font-bold text-lg">{formData.s1_aktivitas}</td><td className="p-2 border text-center font-bold">{formData.s1_aktivitas * 20}</td></tr>
-                                        <tr><td className="p-2 border text-center">2</td><td className="p-2 border font-semibold">Jadwal (10%)</td><td className="p-2 border"><RadioGroup name="s1_jadwal" value={formData.s1_jadwal} onChange={handleScoreChange} options={[{val: 1, label: "Tidak Sesuai"}, {val: 3, label: "50%"}, {val: 4, label: ">= 80%"}]} /></td><td className="p-2 border text-center font-bold">{formData.s1_jadwal}</td><td className="p-2 border text-center font-bold">{formData.s1_jadwal * 10}</td></tr>
-                                        <tr><td className="p-2 border text-center">3</td><td className="p-2 border font-semibold">Tim (10%)</td><td className="p-2 border"><RadioGroup name="s1_tim" value={formData.s1_tim} onChange={handleScoreChange} options={[{val: 1, label: "Tidak aktif"}, {val: 3, label: "Sebagian"}, {val: 4, label: "Semua"}]} /></td><td className="p-2 border text-center font-bold">{formData.s1_tim}</td><td className="p-2 border text-center font-bold">{formData.s1_tim * 10}</td></tr>
+                                        {/* 1. PELAKSANAAN PENELITIAN (40%) */}
+                                        <tr>
+                                            <td rowSpan="9" className="text-center font-bold">1</td>
+                                            <td rowSpan="9" className="font-bold bg-white">Pelaksanaan Penelitian (40%)</td>
+                                            {/* Sub 1: Aktivitas */}
+                                            <td rowSpan="3" className="text-center">Kesesuaian Aktivitas</td>
+                                            <td rowSpan="3" className="text-center font-bold">20</td>
+                                            <td rowSpan="3" className="bg-gray-50"></td>
+                                            <td>Pelaksanaan Penelitian Tidak Sesuai Dengan Aktivitas yang Sudah Direncanakan</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="3" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 3, 4].map(s => <input key={s} type="radio" name="s1_aktivitas" value={s} checked={formData.s1_aktivitas === s} onChange={e => handleScoreChange('s1_aktivitas', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s1_aktivitas}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="3" className="text-center font-bold text-lg">{formData.s1_aktivitas * 20}</td>
+                                        </tr>
+                                        <tr><td>Pelaksanaan Penelitian 50% Sesuai Dengan Aktivitas yang Sudah Direncanakan</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Pelaksanaan Penelitian &gt;= 80% Sesuai Dengan Aktivitas yang Sudah Direncanakan</td><td className="text-center font-bold">4</td></tr>
+                                        
+                                        {/* Sub 2: Jadwal */}
+                                        <tr>
+                                            <td rowSpan="3" className="text-center">Kesesuaian Jadwal</td>
+                                            <td rowSpan="3" className="text-center font-bold">10</td>
+                                            <td rowSpan="3" className="bg-gray-50"></td>
+                                            <td>Pelaksanaan Penelitian Tidak Sesuai Dengan Jadwal yang Sudah Direncanakan</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="3" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 3, 4].map(s => <input key={s} type="radio" name="s1_jadwal" value={s} checked={formData.s1_jadwal === s} onChange={e => handleScoreChange('s1_jadwal', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s1_jadwal}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="3" className="text-center font-bold text-lg">{formData.s1_jadwal * 10}</td>
+                                        </tr>
+                                        <tr><td>Pelaksanaan Penelitian 50% Sesuai Dengan Jadwal yang Sudah Direncanakan</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Pelaksanaan Penelitian &gt;= 80% Sesuai Dengan Jadwal yang Sudah Direncanakan</td><td className="text-center font-bold">4</td></tr>
 
-                                        <tr className="bg-gray-50"><td colSpan="5" className="p-2 font-bold border">2. Luaran (30%)</td></tr>
-                                        <tr><td className="p-2 border text-center">1</td><td className="p-2 border font-semibold">Ketercapaian (10%) <select name="jenisLuaran" value={formData.jenisLuaran} onChange={handleChange} className="ml-2 border p-1"><option value="ki">KI</option><option value="purwarupa">Purwarupa</option></select></td><td className="p-2 border">{formData.jenisLuaran === 'ki' ? <RadioGroup name="s2_ketercapaian" value={formData.s2_ketercapaian} onChange={handleScoreChange} options={[{val:1,label:"Belum"},{val:2,label:"Draft"},{val:3,label:"Lengkap"},{val:4,label:"Terdaftar"}]} /> : <RadioGroup name="s2_ketercapaian" value={formData.s2_ketercapaian} onChange={handleScoreChange} options={[{val:1,label:"Uji Lab"},{val:3,label:"Disempurnakan"},{val:4,label:"Uji Mitra"}]} />}</td><td className="p-2 border text-center font-bold">{formData.s2_ketercapaian}</td><td className="p-2 border text-center font-bold">{formData.s2_ketercapaian * 10}</td></tr>
-                                        <tr><td className="p-2 border text-center">2</td><td className="p-2 border font-semibold">Relevansi (10%)</td><td className="p-2 border"><RadioGroup name="s2_relevansi" value={formData.s2_relevansi} onChange={handleScoreChange} options={[{val:1,label:"Tidak"},{val:2,label:"Kurang"},{val:3,label:"Sesuai"},{val:4,label:"Sangat"}]} /></td><td className="p-2 border text-center font-bold">{formData.s2_relevansi}</td><td className="p-2 border text-center font-bold">{formData.s2_relevansi * 10}</td></tr>
-                                        <tr><td className="p-2 border text-center">3</td><td className="p-2 border font-semibold">Periode (10%)</td><td className="p-2 border"><RadioGroup name="s2_periode" value={formData.s2_periode} onChange={handleScoreChange} options={[{val:1,label:"Tidak"},{val:4,label:"Sesuai"}]} /></td><td className="p-2 border text-center font-bold">{formData.s2_periode}</td><td className="p-2 border text-center font-bold">{formData.s2_periode * 10}</td></tr>
+                                        {/* Sub 3: Tim */}
+                                        <tr>
+                                            <td rowSpan="3" className="text-center">Keterlibatan Anggota Tim dalam Pelaksanaan Kegiatan (10%)</td>
+                                            <td rowSpan="3" className="text-center font-bold">10</td>
+                                            <td rowSpan="3" className="bg-gray-50"></td>
+                                            <td>Ketua atau Sebagian Anggota Tim Tidak Terlibat Aktif dalam Pelaksanaan Penelitian</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="3" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 3, 4].map(s => <input key={s} type="radio" name="s1_tim" value={s} checked={formData.s1_tim === s} onChange={e => handleScoreChange('s1_tim', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s1_tim}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="3" className="text-center font-bold text-lg">{formData.s1_tim * 10}</td>
+                                        </tr>
+                                        <tr><td>Ketua dan Sebagian Anggota Tim Terlibat Aktif dalam Pelaksanaan Penelitian</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Ketua dan Semua Anggota Tim Terlibat Aktif dalam Pelaksanaan Penelitian</td><td className="text-center font-bold">4</td></tr>
 
-                                        <tr className="bg-gray-50"><td colSpan="5" className="p-2 font-bold border">3. Kolaborasi (25%)</td></tr>
-                                        <tr><td className="p-2 border text-center">1</td><td className="p-2 border font-semibold">Mitra (8%)</td><td className="p-2 border"><RadioGroup name="s3_mitra" value={formData.s3_mitra} onChange={handleScoreChange} options={[{val:1,label:"Tidak"},{val:2,label:"10-60%"},{val:3,label:"60-90%"},{val:4,label:"Seluruh"}]} /></td><td className="p-2 border text-center font-bold">{formData.s3_mitra}</td><td className="p-2 border text-center font-bold">{formData.s3_mitra * 8}</td></tr>
-                                        <tr><td className="p-2 border text-center">2</td><td className="p-2 border font-semibold">Koordinasi (5%)</td><td className="p-2 border"><RadioGroup name="s3_koordinasi" value={formData.s3_koordinasi} onChange={handleScoreChange} options={[{val:1,label:"Tidak"},{val:2,label:"Awal"},{val:4,label:"Berkala"}]} /></td><td className="p-2 border text-center font-bold">{formData.s3_koordinasi}</td><td className="p-2 border text-center font-bold">{formData.s3_koordinasi * 5}</td></tr>
-                                        <tr><td className="p-2 border text-center">3</td><td className="p-2 border font-semibold">Pendanaan (5%)</td><td className="p-2 border"><RadioGroup name="s3_pendanaan" value={formData.s3_pendanaan} onChange={handleScoreChange} options={[{val:1,label:"Tidak"},{val:3,label:"<=50%"},{val:4,label:"Sesuai"}]} /></td><td className="p-2 border text-center font-bold">{formData.s3_pendanaan}</td><td className="p-2 border text-center font-bold">{formData.s3_pendanaan * 5}</td></tr>
-                                        <tr><td className="p-2 border text-center">4</td><td className="p-2 border font-semibold">Level Pimpinan (7%)</td><td className="p-2 border"><RadioGroup name="s3_pimpinan" value={formData.s3_pimpinan} onChange={handleScoreChange} options={[{val:2,label:"Operator"},{val:3,label:"Staf"},{val:4,label:"Direktur"}]} /></td><td className="p-2 border text-center font-bold">{formData.s3_pimpinan}</td><td className="p-2 border text-center font-bold">{formData.s3_pimpinan * 7}</td></tr>
-                                    
-                                        <tr className="bg-gray-50"><td colSpan="5" className="p-2 font-bold border">4. Keberlanjutan (5%)</td></tr>
-                                        <tr><td className="p-2 border text-center">1</td><td className="p-2 border font-semibold">Potensi (5%)</td><td className="p-2 border"><RadioGroup name="s4_potensi" value={formData.s4_potensi} onChange={handleScoreChange} options={[{val:1,label:"Tidak"},{val:3,label:"Berpotensi"},{val:4,label:"Dirumuskan"}]} /></td><td className="p-2 border text-center font-bold">{formData.s4_potensi}</td><td className="p-2 border text-center font-bold">{formData.s4_potensi * 5}</td></tr>
+                                        {/* 2. LUARAN DAN DAMPAK (30%) */}
+                                        <tr>
+                                            <td rowSpan={formData.jenisLuaran === 'ki' ? "10" : "9"} className="text-center font-bold">2</td>
+                                            <td rowSpan={formData.jenisLuaran === 'ki' ? "10" : "9"} className="font-bold bg-white">Luaran dan Dampak (30%)</td>
+                                            
+                                            {/* Sub 1: Ketercapaian (Dynamic rows based on Type) */}
+                                            {formData.jenisLuaran === 'ki' ? (
+                                                <>
+                                                    <td rowSpan="4" className="text-center">Ketercapaian Luaran (Pilih berdasarkan luaran yang dijanjikan)</td>
+                                                    <td rowSpan="4" className="text-center font-bold">10</td>
+                                                    <td rowSpan="4" className="text-center align-top p-0">
+                                                        <div className="p-2 font-bold border-b border-black">Kekayaan Intelektual</div>
+                                                        <button type="button" onClick={() => {setFormData(p=>({...p, jenisLuaran:'purwarupa', s2_ketercapaian: 0}))}} className="text-xs text-blue-600 underline p-1 mt-1 block w-full text-center hover:bg-blue-50">Ganti ke Purwarupa</button>
+                                                    </td>
+                                                    <td>Belum Ada Draft</td>
+                                                    <td className="text-center font-bold">1</td>
+                                                    <td rowSpan="4" className="text-center align-middle">
+                                                        <div className="flex flex-col space-y-2 items-center">
+                                                            {[1, 2, 3, 4].map(s => <input key={s} type="radio" name="s2_ketercapaian" value={s} checked={formData.s2_ketercapaian === s} onChange={e => handleScoreChange('s2_ketercapaian', e.target.value)} className="h-4 w-4" />)}
+                                                            <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s2_ketercapaian}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td rowSpan="4" className="text-center font-bold text-lg">{formData.s2_ketercapaian * 10}</td>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <td rowSpan="3" className="text-center">Ketercapaian Luaran (Pilih berdasarkan luaran yang dijanjikan)</td>
+                                                    <td rowSpan="3" className="text-center font-bold">10</td>
+                                                    <td rowSpan="3" className="text-center align-top p-0">
+                                                        <div className="p-2 font-bold border-b border-black">Purwarupa</div>
+                                                        <button type="button" onClick={() => {setFormData(p=>({...p, jenisLuaran:'ki', s2_ketercapaian: 0}))}} className="text-xs text-blue-600 underline p-1 mt-1 block w-full text-center hover:bg-blue-50">Ganti ke KI</button>
+                                                    </td>
+                                                    <td>Purwarupa Sudah Diuji di Laboratorium</td>
+                                                    <td className="text-center font-bold">1</td>
+                                                    <td rowSpan="3" className="text-center align-middle">
+                                                        <div className="flex flex-col space-y-2 items-center">
+                                                            {[1, 3, 4].map(s => <input key={s} type="radio" name="s2_ketercapaian" value={s} checked={formData.s2_ketercapaian === s} onChange={e => handleScoreChange('s2_ketercapaian', e.target.value)} className="h-4 w-4" />)}
+                                                            <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s2_ketercapaian}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td rowSpan="3" className="text-center font-bold text-lg">{formData.s2_ketercapaian * 10}</td>
+                                                </>
+                                            )}
+                                        </tr>
+                                        {/* Rows for Ketercapaian based on selection */}
+                                        {formData.jenisLuaran === 'ki' ? (
+                                            <>
+                                                <tr><td>Masih Berupa Draft</td><td className="text-center font-bold">2</td></tr>
+                                                <tr><td>Draft dan Dokumen Pendaftaran Sudah Lengkap</td><td className="text-center font-bold">3</td></tr>
+                                                <tr><td>Telah Mendapatkan Nomor Pendaftaran</td><td className="text-center font-bold">4</td></tr>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <tr><td>Purwarupa Telah Disempurnakan Namun Belum Diuji di Lingkungan Mitra Industri</td><td className="text-center font-bold">3</td></tr>
+                                                <tr><td>Purwarupa Telah diuji di lingkungan Mitra Industri</td><td className="text-center font-bold">4</td></tr>
+                                            </>
+                                        )}
+
+                                        {/* Sub 2: Relevansi */}
+                                        <tr>
+                                            <td rowSpan="4" className="text-center">Relevansi luaran dalam menjawab kebutuhan industri</td>
+                                            <td rowSpan="4" className="text-center font-bold">10</td>
+                                            <td rowSpan="4" className="bg-gray-50"></td>
+                                            <td>Tidak Sesuai</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="4" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 2, 3, 4].map(s => <input key={s} type="radio" name="s2_relevansi" value={s} checked={formData.s2_relevansi === s} onChange={e => handleScoreChange('s2_relevansi', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s2_relevansi}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="4" className="text-center font-bold text-lg">{formData.s2_relevansi * 10}</td>
+                                        </tr>
+                                        <tr><td>Kurang Sesuai</td><td className="text-center font-bold">2</td></tr>
+                                        <tr><td>Sesuai</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Sangat Sesuai</td><td className="text-center font-bold">4</td></tr>
+
+                                        {/* Sub 3: Periode */}
+                                        <tr>
+                                            <td rowSpan="2" className="text-center">Kesesuaian Periode Pencapaian Luaran</td>
+                                            <td rowSpan="2" className="text-center font-bold">10</td>
+                                            <td rowSpan="2" className="bg-gray-50"></td>
+                                            <td>Tidak Sesuai</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="2" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 4].map(s => <input key={s} type="radio" name="s2_periode" value={s} checked={formData.s2_periode === s} onChange={e => handleScoreChange('s2_periode', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s2_periode}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="2" className="text-center font-bold text-lg">{formData.s2_periode * 10}</td>
+                                        </tr>
+                                        <tr><td>Sesuai</td><td className="text-center font-bold">4</td></tr>
+
+                                        {/* 3. REALISASI KOLABORASI (25%) */}
+                                        <tr>
+                                            <td rowSpan="13" className="text-center font-bold">3</td>
+                                            <td rowSpan="13" className="font-bold bg-white">Realisasi Kolaborasi dengan Mitra Industri (25%)</td>
+                                            {/* Sub 1 */}
+                                            <td rowSpan="4" className="text-center">Keterlibatan Mitra Industri dalam Aktivitas Penelitian</td>
+                                            <td rowSpan="4" className="text-center font-bold">8</td>
+                                            <td rowSpan="4" className="bg-gray-50"></td>
+                                            <td>Tidak Ada Keterlibatan Mitra</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="4" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 2, 3, 4].map(s => <input key={s} type="radio" name="s3_mitra" value={s} checked={formData.s3_mitra === s} onChange={e => handleScoreChange('s3_mitra', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s3_mitra}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="4" className="text-center font-bold text-lg">{formData.s3_mitra * 8}</td>
+                                        </tr>
+                                        <tr><td>Keterlibatan Mitra &gt; 10% namun &lt; 60%</td><td className="text-center font-bold">2</td></tr>
+                                        <tr><td>Mitra Terlibat &gt; 60% namun &lt; 90%</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Mitra Terlibat dalam Seluruh Kegiatan</td><td className="text-center font-bold">4</td></tr>
+
+                                        {/* Sub 2 */}
+                                        <tr>
+                                            <td rowSpan="3" className="text-center">Frekuensi Koordinasi/Kegiatan Bersama Mitra</td>
+                                            <td rowSpan="3" className="text-center font-bold">5</td>
+                                            <td rowSpan="3" className="bg-gray-50"></td>
+                                            <td>Tidak Ada Koordinasi Bersama Mitra</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="3" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 2, 4].map(s => <input key={s} type="radio" name="s3_koordinasi" value={s} checked={formData.s3_koordinasi === s} onChange={e => handleScoreChange('s3_koordinasi', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s3_koordinasi}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="3" className="text-center font-bold text-lg">{formData.s3_koordinasi * 5}</td>
+                                        </tr>
+                                        <tr><td>Koordinasi Hanya Dilakukan di Tahap Awal</td><td className="text-center font-bold">2</td></tr>
+                                        <tr><td>Koordinasi Dilakukan Secara Berkala Setiap Tahapan Kegiatan</td><td className="text-center font-bold">4</td></tr>
+
+                                        {/* Sub 3 */}
+                                        <tr>
+                                            <td rowSpan="3" className="text-center">Realisasi Kontribusi Pendanaan Mitra Industri (Degradasi skor)</td>
+                                            <td rowSpan="3" className="text-center font-bold">5</td>
+                                            <td rowSpan="3" className="bg-gray-50"></td>
+                                            <td>Tidak Ada Realisasi Kontribusi</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="3" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 3, 4].map(s => <input key={s} type="radio" name="s3_pendanaan" value={s} checked={formData.s3_pendanaan === s} onChange={e => handleScoreChange('s3_pendanaan', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s3_pendanaan}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="3" className="text-center font-bold text-lg">{formData.s3_pendanaan * 5}</td>
+                                        </tr>
+                                        <tr><td>Realisasi Kontribusi &lt;=50% dari Kesepakatan</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Realisasi Kontribusi Sesuai dengan Kesepakatan</td><td className="text-center font-bold">4</td></tr>
+
+                                        {/* Sub 4 */}
+                                        <tr>
+                                            <td rowSpan="3" className="text-center">Level Pimpinan Mitra Industri yang Terlibat dalam Penelitian</td>
+                                            <td rowSpan="3" className="text-center font-bold">7</td>
+                                            <td rowSpan="3" className="bg-gray-50"></td>
+                                            <td>Mitra yang Terlibat Merupakan Operator</td>
+                                            <td className="text-center font-bold">2</td>
+                                            <td rowSpan="3" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[2, 3, 4].map(s => <input key={s} type="radio" name="s3_pimpinan" value={s} checked={formData.s3_pimpinan === s} onChange={e => handleScoreChange('s3_pimpinan', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s3_pimpinan}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="3" className="text-center font-bold text-lg">{formData.s3_pimpinan * 7}</td>
+                                        </tr>
+                                        <tr><td>Mitra yang Terlibat Merupakan Staf/ Engineering/Pelaksana</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Mitra yang Terlibat Merupakan Direktur Manager/Pengambil Keputusan</td><td className="text-center font-bold">4</td></tr>
+
+                                        {/* 4. KEBERLANJUTAN (5%) */}
+                                        <tr>
+                                            <td rowSpan="3" className="text-center font-bold">4</td>
+                                            <td rowSpan="3" className="font-bold bg-white">Rencana Keberlanjutan Kolaborasi (5%)</td>
+                                            <td rowSpan="3" className="text-center">Potensi Kerjasama Jangka Panjang</td>
+                                            <td rowSpan="3" className="text-center font-bold">5</td>
+                                            <td rowSpan="3" className="bg-gray-50"></td>
+                                            <td>Tidak Ada Potensi Keberlanjutan</td>
+                                            <td className="text-center font-bold">1</td>
+                                            <td rowSpan="3" className="text-center align-middle">
+                                                <div className="flex flex-col space-y-2 items-center">
+                                                    {[1, 3, 4].map(s => <input key={s} type="radio" name="s4_potensi" value={s} checked={formData.s4_potensi === s} onChange={e => handleScoreChange('s4_potensi', e.target.value)} className="h-4 w-4" />)}
+                                                    <span className="font-bold text-blue-800 text-lg border-t w-full pt-1">{formData.s4_potensi}</span>
+                                                </div>
+                                            </td>
+                                            <td rowSpan="3" className="text-center font-bold text-lg">{formData.s4_potensi * 5}</td>
+                                        </tr>
+                                        <tr><td>Berpotensi untuk Dilanjutkan</td><td className="text-center font-bold">3</td></tr>
+                                        <tr><td>Sudah Dirumuskan Keberlanjutannya</td><td className="text-center font-bold">4</td></tr>
                                     </tbody>
-                                    <tfoot className="bg-blue-100">
-                                        <tr><td colSpan="4" className="p-2 text-right font-bold">Total (Max 400)</td><td className="p-2 text-center font-bold">{calculate().totalRaw}</td></tr>
-                                        <tr><td colSpan="4" className="p-2 text-right font-bold">Nilai Akhir (100)</td><td className="p-2 text-center font-bold text-xl text-blue-800">{calculate().finalScale100}</td></tr>
+                                    <tfoot className="bg-gray-200">
+                                        <tr>
+                                            <td colSpan="8" className="p-2 text-right font-bold text-lg border border-black">TOTAL SKOR (Max 400)</td>
+                                            <td className="p-2 text-center font-extrabold text-2xl text-blue-900 border border-black">{calculate().totalRaw}</td>
+                                        </tr>
+                                        <tr>
+                                            <td colSpan="8" className="p-2 text-right font-bold text-lg border border-black">NILAI AKHIR (Skala 100)</td>
+                                            <td className="p-2 text-center font-extrabold text-2xl text-red-600 border border-black">{calculate().finalScale100}</td>
+                                        </tr>
                                     </tfoot>
                                 </table>
                             </div>
-                            <div className="border p-4 rounded"><label className="font-bold">Komentar Umum</label><textarea name="komentar" rows="4" value={formData.komentar} onChange={handleChange} className="w-full border p-2 rounded"></textarea></div>
-                            <div className="flex justify-end pt-4"><button type="submit" disabled={submitting} className="w-full py-4 bg-blue-600 text-white font-bold rounded shadow">{submitting ? 'Menyimpan...' : 'Kirim Penilaian'}</button></div>
+
+                            <div className="border border-black p-4 font-sans"><label className="font-bold block mb-2">Komentar Umum</label><textarea name="komentar" rows="4" value={formData.komentar} onChange={handleChange} className="w-full border border-gray-400 p-2 rounded" placeholder="Tuliskan komentar Anda..."></textarea></div>
+                            
+                            <div className="flex justify-end pt-8 font-sans">
+                                <div className="text-center w-64">
+                                    <p className="mb-8">Semarang, {currentDate}</p>
+                                    <p>Reviewer,</p>
+                                    <div className="h-24"></div>
+                                    <p className="font-bold underline">{formData.namaReviewer || "....................................................."}</p>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-4 font-sans"><button type="submit" disabled={submitting} className="w-full py-4 bg-blue-600 text-white font-bold rounded shadow hover:bg-blue-700 disabled:opacity-50">{submitting ? 'Menyimpan...' : 'Kirim Penilaian'}</button></div>
                         </form>
                     </div>
                 </div>
@@ -363,7 +706,7 @@ service cloud.firestore {
             const [creds, setCreds] = useState({u:'', p:''});
             const handleLogin = (e) => { e.preventDefault(); if(creds.u === 'admin' && creds.p === 'admin123') setView('dashboard'); else alert("Salah"); };
             return (
-                <div className="flex justify-center py-20"><form onSubmit={handleLogin} className="bg-white p-8 rounded shadow w-96 space-y-4"><h2 className="text-xl font-bold text-center">Login Admin</h2><input className="w-full border p-2 rounded" placeholder="User" value={creds.u} onChange={e=>setCreds({...creds, u:e.target.value})} /><input className="w-full border p-2 rounded" type="password" placeholder="Pass" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} /><div className="flex justify-between"><button type="button" onClick={()=>setView('form')} className="text-sm">Batal</button><button className="bg-blue-600 text-white py-2 px-6 rounded">Masuk</button></div></form></div>
+                <div className="flex justify-center py-20 font-sans"><form onSubmit={handleLogin} className="bg-white p-8 rounded shadow w-96 space-y-4"><h2 className="text-xl font-bold text-center">Login Admin</h2><input className="w-full border p-2 rounded" placeholder="User" value={creds.u} onChange={e=>setCreds({...creds, u:e.target.value})} /><input className="w-full border p-2 rounded" type="password" placeholder="Pass" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} /><div className="flex justify-between"><button type="button" onClick={()=>setView('form')} className="text-sm">Batal</button><button className="bg-blue-600 text-white py-2 px-6 rounded">Masuk</button></div></form></div>
             );
         };
 
@@ -435,7 +778,7 @@ service cloud.firestore {
             };
 
             return (
-                <div className="space-y-6">
+                <div className="space-y-6 font-sans">
                     {/* Panel Pengumuman */}
                     <div className="bg-white p-6 rounded shadow border-l-4 border-yellow-400">
                         <h3 className="font-bold mb-2">Pengaturan Pengumuman (Tampil di Form Reviewer)</h3>
